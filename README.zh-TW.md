@@ -24,14 +24,7 @@ DeepSeek Harness（DSH）是一款桌面智慧代理應用程式。這個套件�
 用戶端可以開啟一個一般的 DSH 工作階段、傳送訊息、等待回覆並讀取它。
 這個工作階段和其他工作階段一樣顯示在應用程式裡。你隨時可以旁觀，也可以接手 ♡
 
-```
-┌────────────┐  stdio  ┌──────────────────────┐  HTTP + 權杖   ┌───────────────────────┐
-│ MCP 用戶端 │ ──────▶ │ dsh-session-bridge-  │ ─────────────▶ │ DSH 應用程式          │
-│ (Claude…)  │ ◀────── │ mcp                  │ ◀───────────── │  └─ session-bridge    │
-└────────────┘         └──────────────────────┘  127.0.0.1     │      外掛（本套件）   │
-                                  │                             └───────────────────────┘
-                                  └── 每次呼叫都讀取 endpoint.json（url + 權杖）
-```
+<p align="center"><img src="docs/architecture.zh-TW.png" alt="架構圖：MCP 用戶端透過 stdio 連接 dsh-session-bridge-mcp，後者透過帶權杖的迴環 HTTP 呼叫 DSH 應用程式內的 session-bridge 外掛。外掛寫入 endpoint.json，MCP 伺服器每次呼叫都會讀取它。" width="860"></p>
 
 ## 環境需求
 
