@@ -1,0 +1,6 @@
+# Allow the pinned release-candidate packages of DeepSeek Harness.
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/*'
+
+allowBuilds:
+  esbuild: true

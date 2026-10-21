@@ -1,0 +1,7 @@
+# Registers the session bridge. Apply after dsh-web-app.
+
+- insert:
+    - id: session-bridge
+      name: '@stellarie/dsh-session-bridge'
+      config:
+        endpointPath: !!js dshHomePath('session-bridge', 'endpoint.json')
