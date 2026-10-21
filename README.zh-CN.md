@@ -34,14 +34,22 @@ DeepSeek Harness（DSH）是一款桌面智能体应用。这个包让另一个�
 
 ## 安装
 
-### 1. 把插件加入 DSH profile
+### 1. 安装插件
 
-在 profile 的 `package.json` 里加入依赖，然后把它写进 bundles，位置在 `@deepseek-ai/dsh-web-app` 之后。
+使用 `dsh` 命令行。请把 `default` 换成你的 profile 名称。
+
+```bash
+dsh plugin --profile default add github:stellarie/dsh-session-bridge
+```
+
+安装时会从源码构建本包，不需要单独的构建步骤。
+
+也可以手动编辑 profile。在 profile 的 `package.json` 里加入依赖，然后把它写进 bundles，位置在 `@deepseek-ai/dsh-web-app` 之后。
 
 ```jsonc
 {
   "dependencies": {
-    "@stellarie/dsh-session-bridge": "^0.1.0"
+    "@stellarie/dsh-session-bridge": "github:stellarie/dsh-session-bridge"
   },
   "dsh": {
     "profile": {
@@ -59,6 +67,14 @@ DeepSeek Harness（DSH）是一款桌面智能体应用。这个包让另一个�
 日志会显示 `session-bridge: serving http://127.0.0.1:…/session-bridge`。
 
 ### 2. 注册 MCP 服务器
+
+让 MCP 客户端指向 profile 内的副本（`<profile-dir>` 是你的 DSH profile 目录）：
+
+```bash
+claude mcp add dsh-session-bridge -- node <profile-dir>/node_modules/@stellarie/dsh-session-bridge/lib/mcp.js
+```
+
+或者直接从 npm 运行，无需安装到 profile：
 
 ```bash
 claude mcp add dsh-session-bridge -- npx -y -p @stellarie/dsh-session-bridge dsh-session-bridge-mcp

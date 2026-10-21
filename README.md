@@ -34,14 +34,22 @@ The session shows in the app like any other session. You can watch it, or take i
 
 ## Install
 
-### 1. Add the plugin to your DSH profile
+### 1. Install the plugin
 
-Add the package to the profile `package.json`. Then list it in the bundles, after `@deepseek-ai/dsh-web-app`.
+Use the `dsh` CLI. Replace `default` with the name of your profile.
+
+```bash
+dsh plugin --profile default add github:stellarie/dsh-session-bridge
+```
+
+The install builds the package from source, so it needs no separate build step.
+
+Or edit the profile by hand. Add the package to the profile `package.json`. Then list it in the bundles, after `@deepseek-ai/dsh-web-app`.
 
 ```jsonc
 {
   "dependencies": {
-    "@stellarie/dsh-session-bridge": "^0.1.0"
+    "@stellarie/dsh-session-bridge": "github:stellarie/dsh-session-bridge"
   },
   "dsh": {
     "profile": {
@@ -59,6 +67,14 @@ The package ships a `cordis.patch.yml`. It inserts the plugin row for you. Resta
 The log shows `session-bridge: serving http://127.0.0.1:…/session-bridge`.
 
 ### 2. Register the MCP server
+
+Point your MCP client at the copy inside the profile (`<profile-dir>` is your DSH profile directory):
+
+```bash
+claude mcp add dsh-session-bridge -- node <profile-dir>/node_modules/@stellarie/dsh-session-bridge/lib/mcp.js
+```
+
+Or run it from npm, with no profile install:
 
 ```bash
 claude mcp add dsh-session-bridge -- npx -y -p @stellarie/dsh-session-bridge dsh-session-bridge-mcp

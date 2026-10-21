@@ -34,14 +34,22 @@ DeepSeek Harness（DSH）是一款桌面智慧代理應用程式。這個套件�
 
 ## 安裝
 
-### 1. 把外掛加入 DSH profile
+### 1. 安裝外掛
 
-在 profile 的 `package.json` 裡加入相依套件，然後把它寫進 bundles，位置在 `@deepseek-ai/dsh-web-app` 之後。
+使用 `dsh` 命令列。請把 `default` 換成你的 profile 名稱。
+
+```bash
+dsh plugin --profile default add github:stellarie/dsh-session-bridge
+```
+
+安裝時會從原始碼建置本套件，不需要另外的建置步驟。
+
+也可以手動編輯 profile。在 profile 的 `package.json` 裡加入相依套件，然後把它寫進 bundles，位置在 `@deepseek-ai/dsh-web-app` 之後。
 
 ```jsonc
 {
   "dependencies": {
-    "@stellarie/dsh-session-bridge": "^0.1.0"
+    "@stellarie/dsh-session-bridge": "github:stellarie/dsh-session-bridge"
   },
   "dsh": {
     "profile": {
@@ -59,6 +67,14 @@ DeepSeek Harness（DSH）是一款桌面智慧代理應用程式。這個套件�
 記錄會顯示 `session-bridge: serving http://127.0.0.1:…/session-bridge`。
 
 ### 2. 註冊 MCP 伺服器
+
+讓 MCP 用戶端指向 profile 內的副本（`<profile-dir>` 是你的 DSH profile 目錄）：
+
+```bash
+claude mcp add dsh-session-bridge -- node <profile-dir>/node_modules/@stellarie/dsh-session-bridge/lib/mcp.js
+```
+
+或者直接從 npm 執行，不需要安裝到 profile：
 
 ```bash
 claude mcp add dsh-session-bridge -- npx -y -p @stellarie/dsh-session-bridge dsh-session-bridge-mcp
