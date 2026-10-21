@@ -56,6 +56,7 @@
   },
   "scripts": {
     "build": "tsc -b && tsdown",
+    "prepare": "tsc -b && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
