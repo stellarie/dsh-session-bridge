@@ -24,14 +24,7 @@ DeepSeek Harness（DSH）是一款桌面智能体应用。这个包让另一个�
 客户端可以打开一个普通的 DSH 会话、发送消息、等待回复并读取它。
 这个会话和其他会话一样显示在应用里。你随时可以旁观，也可以接手 ♡
 
-```
-┌────────────┐  stdio  ┌──────────────────────┐  HTTP + 令牌   ┌───────────────────────┐
-│ MCP 客户端 │ ──────▶ │ dsh-session-bridge-  │ ─────────────▶ │ DSH 应用              │
-│ (Claude…)  │ ◀────── │ mcp                  │ ◀───────────── │  └─ session-bridge    │
-└────────────┘         └──────────────────────┘  127.0.0.1     │      插件（本包）     │
-                                  │                             └───────────────────────┘
-                                  └── 每次调用都读取 endpoint.json（url + 令牌）
-```
+<p align="center"><img src="docs/architecture.zh-CN.png" alt="架构图：MCP 客户端通过 stdio 连接 dsh-session-bridge-mcp，后者通过带令牌的回环 HTTP 调用 DSH 应用内的 session-bridge 插件。插件写入 endpoint.json，MCP 服务器每次调用都会读取它。" width="860"></p>
 
 ## 环境要求
 

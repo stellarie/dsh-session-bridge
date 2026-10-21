@@ -24,14 +24,7 @@ You get two small parts:
 Your client opens a normal DSH session, sends it messages, waits for the reply, and reads it.
 The session shows in the app like any other session. You can watch it, or take it over, any time ♡
 
-```
-┌────────────┐  stdio  ┌──────────────────────┐  HTTP + token  ┌───────────────────────┐
-│ MCP client │ ──────▶ │ dsh-session-bridge-  │ ─────────────▶ │ DSH app               │
-│ (Claude…)  │ ◀────── │ mcp                  │ ◀───────────── │  └─ session-bridge    │
-└────────────┘         └──────────────────────┘  127.0.0.1     │      plugin (this pkg)│
-                                  │                             └───────────────────────┘
-                                  └── reads endpoint.json (url + token), on every call
-```
+<p align="center"><img src="docs/architecture.png" alt="Architecture: an MCP client talks over stdio to dsh-session-bridge-mcp, which calls the session-bridge plugin in the DSH app over loopback HTTP with a bearer token. The plugin writes endpoint.json and the MCP server reads it on every call." width="860"></p>
 
 ## Requirements
 
