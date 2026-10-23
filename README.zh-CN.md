@@ -39,17 +39,21 @@ DeepSeek Harness（DSH）是一款桌面智能体应用。这个包让另一个�
 使用 `dsh` 命令行。请把 `default` 换成你的 profile 名称。
 
 ```bash
-dsh plugin --profile default add github:stellarie/dsh-session-bridge
+dsh plugin --profile default add @stellarie/dsh-session-bridge
 ```
 
-安装时会从源码构建本包，不需要单独的构建步骤。
+也可以直接从 GitHub 安装。安装时会在你的机器上构建本包，所以 profile 必须允许运行构建脚本：
+
+```bash
+dsh plugin --profile default add github:stellarie/dsh-session-bridge
+```
 
 也可以手动编辑 profile。在 profile 的 `package.json` 里加入依赖，然后把它写进 bundles，位置在 `@deepseek-ai/dsh-web-app` 之后。
 
 ```jsonc
 {
   "dependencies": {
-    "@stellarie/dsh-session-bridge": "github:stellarie/dsh-session-bridge"
+    "@stellarie/dsh-session-bridge": "^0.1.0"
   },
   "dsh": {
     "profile": {
