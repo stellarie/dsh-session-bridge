@@ -39,17 +39,21 @@ The session shows in the app like any other session. You can watch it, or take i
 Use the `dsh` CLI. Replace `default` with the name of your profile.
 
 ```bash
-dsh plugin --profile default add github:stellarie/dsh-session-bridge
+dsh plugin --profile default add @stellarie/dsh-session-bridge
 ```
 
-The install builds the package from source, so it needs no separate build step.
+Or install straight from GitHub. The install builds the package on your machine, so the profile must allow build scripts:
+
+```bash
+dsh plugin --profile default add github:stellarie/dsh-session-bridge
+```
 
 Or edit the profile by hand. Add the package to the profile `package.json`. Then list it in the bundles, after `@deepseek-ai/dsh-web-app`.
 
 ```jsonc
 {
   "dependencies": {
-    "@stellarie/dsh-session-bridge": "github:stellarie/dsh-session-bridge"
+    "@stellarie/dsh-session-bridge": "^0.1.0"
   },
   "dsh": {
     "profile": {
