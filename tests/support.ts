@@ -16,7 +16,9 @@ export function fakeGateway(handlers: Record<string, GatewayHandler> = {}) {
     handlers,
     async invoke(request: InvokeRemoteRequest): Promise<unknown> {
       calls.push(request)
-      const handler = Object.hasOwn(handlers, request.method) ? handlers[request.method] : undefined
+      const qualified = `${request.namespace}.${request.method}`
+      const key = Object.hasOwn(handlers, qualified) ? qualified : request.method
+      const handler = Object.hasOwn(handlers, key) ? handlers[key] : undefined
       if (handler === undefined) throw Object.assign(new Error(`no fake for ${request.method}`), { code: 'gateway/not-found' })
       return handler({ ...request.args }, request)
     },
