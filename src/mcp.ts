@@ -19,6 +19,7 @@ import { EndpointError, readEndpoint, resolveEndpointPath } from './discovery.ts
 /** Longest single wait request. The HTTP client gives up on silent requests after five minutes. */
 const WAIT_CHUNK_MS = 240_000
 const DEFAULT_WAIT_SECONDS = 600
+const DEFAULT_EFFORT = 'high'
 
 /** A bridge or transport failure that a tool reports as an MCP tool error. */
 export class BridgeToolError extends Error {
@@ -162,6 +163,48 @@ function rpc(client: BridgeClient, method: string, args: Record<string, unknown>
   return client.post(`/session-bridge/rpc/${method}`, { args })
 }
 
+function workspaceRpc(client: BridgeClient, method: string, args: Record<string, unknown>): Promise<unknown> {
+  return client.post(`/session-bridge/rpc/workspace/${method}`, { args })
+}
+
+interface EffortPlan {
+  readonly provider: string
+  readonly model: string
+  readonly effort: string
+}
+
+/**
+ * Check an effort against the default model of the app catalog.
+ * @param catalog - `modelCatalog` reply.
+ * @param effort - requested reasoning effort.
+ * @returns the selection to apply, or undefined when the default model has no efforts.
+ * @throws {BridgeToolError} when the model offers efforts and the request is not one of them.
+ */
+export function planEffort(catalog: unknown, effort: string): EffortPlan | undefined {
+  const fallback = isRecord(catalog) ? catalog['default'] : undefined
+  const provider = isRecord(fallback) ? stringOf(fallback['provider']) : null
+  const model = isRecord(fallback) ? stringOf(fallback['model']) : null
+  if (provider === null || model === null) {
+    throw new BridgeToolError('bridge/bad-reply', 'The model catalog has no default model.')
+  }
+  const groups = isRecord(catalog) && Array.isArray(catalog['groups']) ? catalog['groups'] as unknown[] : []
+  const group = groups.find(item => isRecord(item) && item['id'] === provider)
+  const models = isRecord(group) && Array.isArray(group['models']) ? group['models'] as unknown[] : []
+  const entry = models.find(item => isRecord(item) && item['id'] === model)
+  const reasoning = isRecord(entry) ? entry['reasoning'] : undefined
+  const efforts = isRecord(reasoning) && Array.isArray(reasoning['efforts'])
+    ? (reasoning['efforts'] as unknown[]).flatMap(item => isRecord(item) && typeof item['id'] === 'string' ? [item['id']] : [])
+    : []
+  if (efforts.length === 0) return undefined
+  if (!efforts.includes(effort)) {
+    throw new BridgeToolError(
+      'bridge/effort-unsupported',
+      `The default model ${provider}/${model} offers these efforts: ${efforts.join(', ')}. Got "${effort}".`,
+    )
+  }
+  return { provider, model, effort }
+}
+
 async function asOfSeq(client: BridgeClient, sessionId: string): Promise<number> {
   const projections = await rpc(client, 'projections', { request: { sessionId } })
   const seq = isRecord(projections) ? numberOf(projections['asOfSeq']) : undefined
@@ -275,19 +318,34 @@ export function createMcpServer(client: BridgeClient): McpServer {
   })))
 
   server.registerTool('dsh_open_session', {
-    description: 'Open a Session in the running app. By default it reuses the newest idle Session with the same preset and cwd. Set reuse to false for a new Session.',
+    description: 'Open a Session in the Workspace of a directory. By default it reuses the newest idle Session with the same preset and cwd. Set reuse to false for a new Session. A new Session joins the Workspace of cwd, which the app creates when none exists. It starts at the requested effort, and the app also saves that effort as its default model selection.',
     inputSchema: {
-      cwd: z.string().min(1).describe('Absolute working directory for the Session.'),
+      cwd: z.string().min(1).describe('Absolute path of the target Workspace directory. It must exist.'),
       preset: z.string().min(1).default('yuu').describe('Agent preset id.'),
-      reuse: z.boolean().default(true).describe('Reuse an idle Session with the same preset and cwd.'),
+      reuse: z.boolean().default(true).describe('Reuse an idle Session with the same preset and cwd. A reused Session keeps its effort.'),
+      effort: z.string().min(1).default(DEFAULT_EFFORT).describe('Reasoning effort for a new Session, such as high or max.'),
     },
-  }, ({ cwd, preset, reuse }) => guarded(async () => {
+  }, ({ cwd, preset, reuse, effort }) => guarded(async () => {
     if (reuse) {
       const existing = reusableSession(await listSessions(client), cwd, preset)
       if (existing !== undefined) return { sessionId: existing, reused: true }
     }
-    const value = await rpc(client, 'create', { request: { cwd, agentPreset: preset } })
-    return { sessionId: isRecord(value) ? value['sessionId'] : undefined, reused: false }
+    const plan = planEffort(await rpc(client, 'modelCatalog', {}), effort)
+    const placed = await workspaceRpc(client, 'create', { request: { path: cwd } })
+    const workspace = isRecord(placed) && isRecord(placed['workspace']) ? placed['workspace'] : undefined
+    const workspaceId = workspace === undefined ? null : stringOf(workspace['workspaceId'])
+    if (workspaceId === null) throw new BridgeToolError('bridge/bad-reply', `The app returned no Workspace for ${cwd}.`)
+    const value = await rpc(client, 'create', { request: { workspaceId, agentPreset: preset } })
+    const sessionId = isRecord(value) ? value['sessionId'] : undefined
+    if (plan !== undefined) {
+      try {
+        await rpc(client, 'selectModel', { request: { sessionId, provider: plan.provider, model: plan.model, reasoningEffort: plan.effort } })
+      } catch (error) {
+        const detail = error instanceof BridgeToolError ? `${error.code}: ${error.message}` : String(error)
+        throw new BridgeToolError('bridge/effort-failed', `Session ${String(sessionId)} was opened in Workspace ${workspaceId}, but its effort was not set. ${detail}`)
+      }
+    }
+    return { sessionId, reused: false, workspaceId, effort: plan?.effort ?? null }
   }))
 
   server.registerTool('dsh_send', {

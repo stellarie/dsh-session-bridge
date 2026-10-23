@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { ALLOWED_METHODS, MAX_BODY_BYTES } from '../src/bridge.ts'
+import { ALLOWED_METHODS, ALLOWED_WORKSPACE_METHODS, MAX_BODY_BYTES } from '../src/bridge.ts'
 import { raw, startBridge, TOKEN, waitFor } from './support.ts'
 import type { RunningBridge } from './support.ts'
 
@@ -87,6 +87,8 @@ describe('bridge allowlist (AT4)', () => {
   it.each([
     '/session-bridge', '/session-bridge/', '/session-bridge/rpc', '/session-bridge/rpc/', '/session-bridge/rpc/create/extra',
     '/session-bridge/rpc/create%2Fx', '/session-bridge/other', '/session-bridge/wait/extra',
+    '/session-bridge/rpc/workspace', '/session-bridge/rpc/workspace/', '/session-bridge/rpc/workspace/create/extra',
+    '/session-bridge/rpc/workspace/workspace/create', '/session-bridge/rpc/session/create',
   ])('answers 404 for path %s', async (path) => {
     bridge = await startBridge({ create: () => 'reached' })
     const reply = await bridge.post(path, okArgs)
@@ -94,8 +96,28 @@ describe('bridge allowlist (AT4)', () => {
     expect(bridge.gateway.calls).toHaveLength(0)
   })
 
-  it('forwards exactly the six allowlisted methods in the session namespace with the owner peer', async () => {
-    expect([...ALLOWED_METHODS].sort()).toEqual(['cancel', 'create', 'list', 'page', 'projections', 'prompt'])
+  it.each([
+    'delete', 'rename', 'insertBefore', 'archiveSession', 'follow', 'Create', '__proto__',
+  ])('answers 404 for workspace method %s without calling the gateway', async (method) => {
+    bridge = await startBridge({ [method]: () => 'reached', [`workspace.${method}`]: () => 'reached' })
+    const reply = await bridge.post(`/session-bridge/rpc/workspace/${method}`, okArgs)
+    expect(reply.status).toBe(404)
+    expect(bridge.gateway.calls).toHaveLength(0)
+  })
+
+  it('forwards only workspace create in the workspace namespace with the owner peer', async () => {
+    expect([...ALLOWED_WORKSPACE_METHODS]).toEqual(['create'])
+    bridge = await startBridge({ 'workspace.create': () => ({ workspace: 'w' }), create: () => 'wrong namespace' })
+    const reply = await bridge.post('/session-bridge/rpc/workspace/create', { args: { request: { path: 'C:/repo' } } })
+    expect(reply.body).toEqual({ ok: true, value: { workspace: 'w' } })
+    expect(bridge.gateway.calls.map(call => [call.namespace, call.method])).toEqual([['workspace', 'create']])
+    expect(bridge.gateway.calls[0]?.peer.principal.kind).toBe('owner')
+  })
+
+  it('forwards exactly the eight allowlisted methods in the session namespace with the owner peer', async () => {
+    expect([...ALLOWED_METHODS].sort()).toEqual([
+      'cancel', 'create', 'list', 'modelCatalog', 'page', 'projections', 'prompt', 'selectModel',
+    ])
     bridge = await startBridge(Object.fromEntries([...ALLOWED_METHODS].map(method => [method, () => ({ method })])))
     for (const method of ALLOWED_METHODS) {
       const reply = await bridge.post(`/session-bridge/rpc/${method}`, { args: { request: { tag: method } } })

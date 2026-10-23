@@ -89,7 +89,7 @@ The MCP server reads the endpoint file on every call. An app restart needs no MC
 | Tool | What it does |
 |---|---|
 | `dsh_list_sessions` | List sessions: id, title, preset, working directory, running or idle. |
-| `dsh_open_session` | Open a session in `cwd`. Reuses the newest idle session with the same `preset` and `cwd`. Pass `reuse: false` for a new one. |
+| `dsh_open_session` | Open a session in the Workspace of `cwd`. The app creates the Workspace when none exists. Reuses the newest idle session with the same `preset` and `cwd`. Pass `reuse: false` for a new one. A new session starts at `effort` (default `high`). |
 | `dsh_send` | Send a message. Mode `queue` runs after the current turn. Mode `steer` joins the running turn. Returns `afterSeq`. |
 | `dsh_wait` | Wait until the session ends a turn after `afterSeq`. Default 600 s, maximum 600 s. |
 | `dsh_read` | Read your prompts and the assistant text after `afterSeq`. Tool calls and thinking are left out. |
@@ -98,7 +98,7 @@ The MCP server reads the endpoint file on every call. An app restart needs no MC
 A typical round trip:
 
 ```text
-dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused }
+dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused, workspaceId, effort }
 dsh_send         { sessionId, text: "Fix the failing test" } → { accepted, afterSeq: 41 }
 dsh_wait         { sessionId, afterSeq: 41 }               → { ended: true, lastSeq: 58 }
 dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ … ] }
@@ -106,6 +106,9 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 
 > `dsh_open_session` defaults `preset` to `yuu`, the author's own preset. Pass your own preset id.
 > See [BACKLOG 1](docs/BACKLOG.md).
+
+> A new session sets its effort through the app's model selection. The app also saves that effort as its default for every session.
+> See [BACKLOG 5](docs/BACKLOG.md).
 
 ## How the bridge stays safe (｀ω´)ゞ
 
@@ -117,7 +120,7 @@ Every request must pass these checks, in this order:
 2. A loopback `Host` (`127.0.0.1`, `localhost`, or `[::1]`) with the server port.
 3. A bearer token, compared in constant time.
 4. `POST` only, with a JSON body of at most 1 MiB.
-5. A method on the allowlist: `create`, `prompt`, `page`, `projections`, `list`, `cancel`.
+5. A method on the allowlist. Session methods: `create`, `prompt`, `page`, `projections`, `list`, `cancel`, `selectModel`, `modelCatalog`. Workspace method: `create`.
 
 The token is 32 random bytes. The plugin mints a new one at each start.
 It writes `endpoint.json` (`url`, `token`, `pid`, `startedAt`) with mode `0600` (POSIX) and deletes it on shutdown.
@@ -125,6 +128,7 @@ It writes `endpoint.json` (`url`, `token`, `pid`, `startedAt`) with mode `0600` 
 - **Treat the endpoint file as a secret.** Anyone who reads it can prompt your agents.
 - The bridge listens only where the DSH web server listens. It adds no port of its own.
 - The bridge speaks as the app owner. A prompt you send acts like a prompt you type in the app.
+- `dsh_open_session` creates a Workspace for `cwd` when none exists, and it saves the new session's effort as the app default.
 
 ## Configuration
 

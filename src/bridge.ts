@@ -1,7 +1,7 @@
 /**
  * Loopback HTTP bridge from local MCP clients to the Session Remote methods.
  * Every request needs a bearer token, a loopback `Host`, and no `Origin`.
- * Only an allowlist of Session methods reaches the Typert Gateway.
+ * Only an allowlist of Session methods, and Workspace `create`, reaches the Typert Gateway.
  *
  * @module @stellarie/dsh-session-bridge/bridge
  */
@@ -13,7 +13,11 @@ import type { InvokeRemoteRequest, TypertGateway } from '@deepseek-ai/dsh-api-ga
 /** Route prefix registered on the app web server. */
 export const ROUTE_PREFIX = '/session-bridge'
 /** Session Remote methods the bridge forwards. */
-export const ALLOWED_METHODS: ReadonlySet<string> = new Set(['create', 'prompt', 'page', 'projections', 'list', 'cancel'])
+export const ALLOWED_METHODS: ReadonlySet<string> = new Set([
+  'create', 'prompt', 'page', 'projections', 'list', 'cancel', 'selectModel', 'modelCatalog',
+])
+/** Workspace Remote methods the bridge forwards, under `/rpc/workspace/`. */
+export const ALLOWED_WORKSPACE_METHODS: ReadonlySet<string> = new Set(['create'])
 /** Largest request body in bytes. */
 export const MAX_BODY_BYTES = 1024 * 1024
 /** Longest `wait` deadline in milliseconds. */
@@ -155,8 +159,8 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 export function createBridgeHandler(options: BridgeOptions): BridgeHandler {
   const pollMs = options.pollIntervalMs ?? POLL_INTERVAL_MS
 
-  const call = (method: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> =>
-    options.gateway.invoke({ namespace: 'session', method, args, peer: options.peer, signal })
+  const call = (namespace: string, method: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> =>
+    options.gateway.invoke({ namespace, method, args, peer: options.peer, signal })
 
   const wait = async (body: unknown, signal: AbortSignal): Promise<{ ended: boolean; timedOut?: true; lastSeq: number }> => {
     if (!isRecord(body)) throw new BridgeHttpError(400, 'bridge/bad-request', 'Body must be an object.')
@@ -173,7 +177,7 @@ export function createBridgeHandler(options: BridgeOptions): BridgeHandler {
     const deadline = Date.now() + Math.min(timeoutMs, MAX_WAIT_MS)
     let lastSeq = afterSeq
     while (true) {
-      const projections = await call('projections', { request: { sessionId } }, signal)
+      const projections = await call('session', 'projections', { request: { sessionId } }, signal)
       const asOfSeq = isRecord(projections) && typeof projections['asOfSeq'] === 'number' ? projections['asOfSeq'] : undefined
       if (asOfSeq === undefined) {
         throw new BridgeCallError(
@@ -182,7 +186,7 @@ export function createBridgeHandler(options: BridgeOptions): BridgeHandler {
         )
       }
       lastSeq = asOfSeq
-      const page = await call('page', { request: { address: { kind: 'session', sessionId }, throughSeq: asOfSeq } }, signal)
+      const page = await call('session', 'page', { request: { address: { kind: 'session', sessionId }, throughSeq: asOfSeq } }, signal)
       const records = isRecord(page) && Array.isArray(page['records']) ? page['records'] as unknown[] : []
       const ended = records.some((record) => {
         if (!isRecord(record) || !isRecord(record['event'])) return false
@@ -217,9 +221,12 @@ export function createBridgeHandler(options: BridgeOptions): BridgeHandler {
       return
     }
     const path = (req.url ?? '').split('?')[0] ?? ''
-    const rpc = /^\/session-bridge\/rpc\/([A-Za-z0-9_-]+)$/.exec(path)
+    const rpc = /^\/session-bridge\/rpc\/(?:(workspace)\/)?([A-Za-z0-9_-]+)$/.exec(path)
+    const namespace = rpc?.[1] ?? 'session'
+    const method = rpc?.[2] ?? ''
+    const allowed = namespace === 'workspace' ? ALLOWED_WORKSPACE_METHODS : ALLOWED_METHODS
     const isWait = path === `${ROUTE_PREFIX}/wait`
-    if ((rpc === null || !ALLOWED_METHODS.has(rpc[1] ?? '')) && !isWait) {
+    if ((rpc === null || !allowed.has(method)) && !isWait) {
       fail(res, 404, 'bridge/not-found', 'Unknown bridge endpoint.')
       return
     }
@@ -234,7 +241,7 @@ export function createBridgeHandler(options: BridgeOptions): BridgeHandler {
       }
       const args = isRecord(body) ? body['args'] : undefined
       if (!isRecord(args)) throw new BridgeHttpError(400, 'bridge/bad-request', 'Body must be an object with an args object.')
-      const value = await call(rpc?.[1] ?? '', args, abort.signal)
+      const value = await call(namespace, method, args, abort.signal)
       send(res, 200, { ok: true, value })
     } catch (error) {
       if (error instanceof BridgeHttpError) {

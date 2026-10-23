@@ -89,7 +89,7 @@ MCP 服务器每次调用都会重新读取 endpoint 文件，所以重启应用
 | 工具 | 作用 |
 |---|---|
 | `dsh_list_sessions` | 列出会话：id、标题、预设、工作目录、是否正在运行。 |
-| `dsh_open_session` | 在 `cwd` 中打开会话。默认复用 `preset` 和 `cwd` 相同的最新空闲会话。传 `reuse: false` 则新建。 |
+| `dsh_open_session` | 在 `cwd` 所在的工作区（Workspace）中打开会话；工作区不存在时由应用创建。默认复用 `preset` 和 `cwd` 相同的最新空闲会话。传 `reuse: false` 则新建。新会话以 `effort`（默认 `high`）启动。 |
 | `dsh_send` | 发送消息。`queue` 模式在当前回合结束后运行，`steer` 模式加入正在运行的回合。返回 `afterSeq`。 |
 | `dsh_wait` | 等待会话在 `afterSeq` 之后结束一个回合。默认 600 秒，最长 600 秒。 |
 | `dsh_read` | 读取 `afterSeq` 之后你的提示和助手的文本。不含工具调用和思考内容。 |
@@ -98,7 +98,7 @@ MCP 服务器每次调用都会重新读取 endpoint 文件，所以重启应用
 一次典型的往返：
 
 ```text
-dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused }
+dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused, workspaceId, effort }
 dsh_send         { sessionId, text: "Fix the failing test" } → { accepted, afterSeq: 41 }
 dsh_wait         { sessionId, afterSeq: 41 }               → { ended: true, lastSeq: 58 }
 dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ … ] }
@@ -106,6 +106,9 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 
 > `dsh_open_session` 的 `preset` 默认值是 `yuu`，那是作者自己的预设。请传入你自己的预设 id。
 > 参见 [BACKLOG 1](docs/BACKLOG.md)。
+
+> 新会话通过应用的模型选择来设置 effort。应用同时会把这个 effort 保存为所有会话的默认值。
+> 参见 [BACKLOG 5](docs/BACKLOG.md)。
 
 ## 桥如何保证安全 (｀ω´)ゞ
 
@@ -117,7 +120,7 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 2. `Host` 是回环地址（`127.0.0.1`、`localhost` 或 `[::1]`），且端口与服务器端口一致。
 3. 带有持有者令牌（bearer token），并以恒定时间比较。
 4. 只允许 `POST`，JSON 正文最大 1 MiB。
-5. 方法在白名单内：`create`、`prompt`、`page`、`projections`、`list`、`cancel`。
+5. 方法在白名单内。会话方法：`create`、`prompt`、`page`、`projections`、`list`、`cancel`、`selectModel`、`modelCatalog`。工作区方法：`create`。
 
 令牌是 32 个随机字节，插件每次启动都会重新生成。
 插件在 POSIX 上以 `0600` 权限写入 `endpoint.json`（`url`、`token`、`pid`、`startedAt`），关闭时删除。
@@ -125,6 +128,7 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 - **请把 endpoint 文件当作机密。** 任何能读取它的人都可以向你的智能体发送提示。
 - 桥只监听 DSH 网页服务器所监听的地址，不会自己再开端口。
 - 桥以应用所有者的身份发言。你发送的提示，效果等同于你在应用里亲手输入的提示。
+- `dsh_open_session` 会在 `cwd` 没有工作区时创建工作区，并把新会话的 effort 保存为应用默认值。
 
 ## 配置
 

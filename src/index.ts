@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import { createBridgeHandler, ROUTE_PREFIX } from './bridge.ts'
 import { mintToken, removeEndpoint, resolveEndpointPath, writeEndpoint } from './discovery.ts'
 
-export { ALLOWED_METHODS, createBridgeHandler, isLoopbackHostHeader, ROUTE_PREFIX } from './bridge.ts'
+export { ALLOWED_METHODS, ALLOWED_WORKSPACE_METHODS, createBridgeHandler, isLoopbackHostHeader, ROUTE_PREFIX } from './bridge.ts'
 export type { BridgeHandler, BridgeOptions } from './bridge.ts'
 export { EndpointError, mintToken, readEndpoint, removeEndpoint, resolveEndpointPath, writeEndpoint } from './discovery.ts'
 export type { Endpoint } from './discovery.ts'

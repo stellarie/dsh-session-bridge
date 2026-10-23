@@ -97,6 +97,25 @@ function jsonOf(result: CallToolResult): unknown {
 
 const ok = (value: unknown) => ({ ok: true, value })
 const rpc = (method: string) => `/session-bridge/rpc/${method}`
+const workspaceCreate = '/session-bridge/rpc/workspace/create'
+
+/** Catalog reply whose default model offers these efforts, or none. */
+const catalog = (efforts: readonly string[] | null = ['high', 'max']) => ok({
+  default: { provider: 'prov', model: 'mod', reasoningEffort: 'max' },
+  routableProviders: ['prov'],
+  groups: [{
+    id: 'prov',
+    name: 'Provider',
+    models: [{
+      id: 'mod',
+      name: 'Model',
+      ...efforts === null ? {} : { reasoning: { efforts: efforts.map(id => ({ id, name: id })), defaultEffort: 'max' } },
+    }],
+  }],
+  failures: [],
+})
+const placed = (workspaceId = 'ws-1') => ok({ workspace: { workspaceId, path: 'C:/repo', title: 'repo', sessionIds: [] }, created: false })
+const pathsOf = (seen: Seen[]) => seen.map(entry => entry.path)
 
 describe('MCP tools (AT7)', () => {
   it('lists the six tools', async () => {
@@ -138,15 +157,92 @@ describe('MCP tools (AT7)', () => {
     expect(seen.map(entry => entry.body)).toEqual([{ args: { _request: {} } }, { args: { request: {} } }])
   })
 
-  it('dsh_open_session with reuse false creates a yuu Session by default', async () => {
-    const seen = await startFakeBridge({ [rpc('create')]: [ok({ sessionId: 'new-1', agentPreset: 'yuu' })] })
-    expect(jsonOf(await call('dsh_open_session', { cwd: 'C:/repo', reuse: false }))).toEqual({ sessionId: 'new-1', reused: false })
-    expect(seen[0]).toMatchObject({
-      path: rpc('create'),
-      body: { args: { request: { cwd: 'C:/repo', agentPreset: 'yuu' } } },
+  it('dsh_open_session creates a yuu Session in the Workspace of cwd at high effort by default', async () => {
+    const seen = await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [placed()],
+      [rpc('create')]: [ok({ sessionId: 'new-1', agentPreset: 'yuu' })],
+      [rpc('selectModel')]: [ok({ selected: {} })],
     })
-    await call('dsh_open_session', { cwd: 'C:/repo', preset: 'other', reuse: false })
-    expect(seen[1]?.body).toEqual({ args: { request: { cwd: 'C:/repo', agentPreset: 'other' } } })
+    expect(jsonOf(await call('dsh_open_session', { cwd: 'C:/repo', reuse: false })))
+      .toEqual({ sessionId: 'new-1', reused: false, workspaceId: 'ws-1', effort: 'high' })
+    expect(pathsOf(seen)).toEqual([rpc('modelCatalog'), workspaceCreate, rpc('create'), rpc('selectModel')])
+    expect(seen[1]?.body).toEqual({ args: { request: { path: 'C:/repo' } } })
+    expect(seen[2]?.body).toEqual({ args: { request: { workspaceId: 'ws-1', agentPreset: 'yuu' } } })
+    expect(seen[3]?.body).toEqual({
+      args: { request: { sessionId: 'new-1', provider: 'prov', model: 'mod', reasoningEffort: 'high' } },
+    })
+  })
+
+  it('dsh_open_session passes a custom preset and effort through', async () => {
+    const seen = await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [placed('ws-9')],
+      [rpc('create')]: [ok({ sessionId: 'new-3' })],
+      [rpc('selectModel')]: [ok({ selected: {} })],
+    })
+    const result = jsonOf(await call('dsh_open_session', { cwd: 'C:/repo', preset: 'other', effort: 'max', reuse: false }))
+    expect(result).toEqual({ sessionId: 'new-3', reused: false, workspaceId: 'ws-9', effort: 'max' })
+    expect(seen[2]?.body).toEqual({ args: { request: { workspaceId: 'ws-9', agentPreset: 'other' } } })
+    expect((seen[3]?.body as { args: { request: Record<string, unknown> } }).args.request['reasoningEffort']).toBe('max')
+  })
+
+  it('dsh_open_session never sends cwd and workspaceId together', async () => {
+    const seen = await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [placed()],
+      [rpc('create')]: [ok({ sessionId: 'new-4' })],
+      [rpc('selectModel')]: [ok({ selected: {} })],
+    })
+    await call('dsh_open_session', { cwd: 'C:/repo', reuse: false })
+    const create = (seen.find(entry => entry.path === rpc('create'))?.body as { args: { request: Record<string, unknown> } }).args.request
+    expect(Object.keys(create).sort()).toEqual(['agentPreset', 'workspaceId'])
+  })
+
+  it('dsh_open_session rejects an unknown effort before it creates a Workspace or Session', async () => {
+    const seen = await startFakeBridge({ [rpc('modelCatalog')]: [catalog(['high', 'max'])] })
+    const result = await call('dsh_open_session', { cwd: 'C:/repo', effort: 'turbo', reuse: false })
+    expect(result.isError).toBe(true)
+    expect(textOf(result)).toContain('bridge/effort-unsupported')
+    expect(textOf(result)).toContain('high, max')
+    expect(pathsOf(seen)).toEqual([rpc('modelCatalog')])
+  })
+
+  it('dsh_open_session skips effort when the default model has no efforts', async () => {
+    const seen = await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog(null)],
+      [workspaceCreate]: [placed()],
+      [rpc('create')]: [ok({ sessionId: 'new-5' })],
+    })
+    expect(jsonOf(await call('dsh_open_session', { cwd: 'C:/repo', reuse: false })))
+      .toEqual({ sessionId: 'new-5', reused: false, workspaceId: 'ws-1', effort: null })
+    expect(pathsOf(seen)).toEqual([rpc('modelCatalog'), workspaceCreate, rpc('create')])
+  })
+
+  it('dsh_open_session names the opened Session when setting effort fails', async () => {
+    await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [placed()],
+      [rpc('create')]: [ok({ sessionId: 'new-6' })],
+      [rpc('selectModel')]: [{ ok: false, error: { code: 'session/model-unavailable', message: 'gone' } }],
+    })
+    const result = await call('dsh_open_session', { cwd: 'C:/repo', reuse: false })
+    expect(result.isError).toBe(true)
+    expect(textOf(result)).toContain('bridge/effort-failed')
+    expect(textOf(result)).toContain('new-6')
+    expect(textOf(result)).toContain('session/model-unavailable')
+  })
+
+  it('dsh_open_session reports a Workspace failure without creating a Session', async () => {
+    const seen = await startFakeBridge({
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [{ ok: false, error: { code: 'workspace/invalid-path', message: 'no such directory' } }],
+      [rpc('create')]: [ok({ sessionId: 'never' })],
+    })
+    const result = await call('dsh_open_session', { cwd: 'C:/missing', reuse: false })
+    expect(result.isError).toBe(true)
+    expect(textOf(result)).toContain('workspace/invalid-path')
+    expect(pathsOf(seen)).toEqual([rpc('modelCatalog'), workspaceCreate])
   })
 
   it('dsh_open_session reuses the newest idle Session with the same preset and cwd', async () => {
@@ -170,10 +266,14 @@ describe('MCP tools (AT7)', () => {
       [rpc('list')]: [ok({ items: [
         { sessionId: 'busy', updatedAt: 1, running: true, cwd: 'C:/repo', projections: { kind: 'sequenced', asOfSeq: 1, values: { agentPreset: 'yuu' } } },
       ] })],
+      [rpc('modelCatalog')]: [catalog()],
+      [workspaceCreate]: [placed()],
       [rpc('create')]: [ok({ sessionId: 'new-2' })],
+      [rpc('selectModel')]: [ok({ selected: {} })],
     })
-    expect(jsonOf(await call('dsh_open_session', { cwd: 'C:/repo' }))).toEqual({ sessionId: 'new-2', reused: false })
-    expect(seen.map(entry => entry.path)).toEqual([rpc('list'), rpc('create')])
+    expect(jsonOf(await call('dsh_open_session', { cwd: 'C:/repo' })))
+      .toEqual({ sessionId: 'new-2', reused: false, workspaceId: 'ws-1', effort: 'high' })
+    expect(pathsOf(seen)).toEqual([rpc('list'), rpc('modelCatalog'), workspaceCreate, rpc('create'), rpc('selectModel')])
   })
 
   it('dsh_send reads asOfSeq first, then prompts with a fresh requestId, and returns afterSeq', async () => {

@@ -89,7 +89,7 @@ MCP 伺服器每次呼叫都會重新讀取 endpoint 檔案，所以重新啟動
 | 工具 | 作用 |
 |---|---|
 | `dsh_list_sessions` | 列出工作階段：id、標題、預設組態、工作目錄、是否正在執行。 |
-| `dsh_open_session` | 在 `cwd` 中開啟工作階段。預設重用 `preset` 和 `cwd` 相同的最新閒置工作階段。傳入 `reuse: false` 則新建。 |
+| `dsh_open_session` | 在 `cwd` 所在的工作區（Workspace）中開啟工作階段；工作區不存在時由應用程式建立。預設重用 `preset` 和 `cwd` 相同的最新閒置工作階段。傳入 `reuse: false` 則新建。新工作階段以 `effort`（預設 `high`）啟動。 |
 | `dsh_send` | 傳送訊息。`queue` 模式在目前回合結束後執行，`steer` 模式加入正在執行的回合。回傳 `afterSeq`。 |
 | `dsh_wait` | 等待工作階段在 `afterSeq` 之後結束一個回合。預設 600 秒，最長 600 秒。 |
 | `dsh_read` | 讀取 `afterSeq` 之後你的提示和助理的文字。不含工具呼叫和思考內容。 |
@@ -98,7 +98,7 @@ MCP 伺服器每次呼叫都會重新讀取 endpoint 檔案，所以重新啟動
 一次典型的往返：
 
 ```text
-dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused }
+dsh_open_session { cwd: "C:/repo", preset: "my-preset" }  → { sessionId, reused, workspaceId, effort }
 dsh_send         { sessionId, text: "Fix the failing test" } → { accepted, afterSeq: 41 }
 dsh_wait         { sessionId, afterSeq: 41 }               → { ended: true, lastSeq: 58 }
 dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ … ] }
@@ -106,6 +106,9 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 
 > `dsh_open_session` 的 `preset` 預設值是 `yuu`，那是作者自己的預設組態。請傳入你自己的預設組態 id。
 > 參見 [BACKLOG 1](docs/BACKLOG.md)。
+
+> 新工作階段透過應用程式的模型選擇來設定 effort。應用程式同時會把這個 effort 儲存為所有工作階段的預設值。
+> 參見 [BACKLOG 5](docs/BACKLOG.md)。
 
 ## 橋如何確保安全 (｀ω´)ゞ
 
@@ -117,7 +120,7 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 2. `Host` 是迴環位址（`127.0.0.1`、`localhost` 或 `[::1]`），且連接埠與伺服器連接埠一致。
 3. 帶有持有人權杖（bearer token），並以固定時間比較。
 4. 只允許 `POST`，JSON 內容最大 1 MiB。
-5. 方法在允許清單內：`create`、`prompt`、`page`、`projections`、`list`、`cancel`。
+5. 方法在允許清單內。工作階段方法：`create`、`prompt`、`page`、`projections`、`list`、`cancel`、`selectModel`、`modelCatalog`。工作區方法：`create`。
 
 權杖是 32 個隨機位元組，外掛每次啟動都會重新產生。
 外掛在 POSIX 上以 `0600` 權限寫入 `endpoint.json`（`url`、`token`、`pid`、`startedAt`），關閉時刪除。
@@ -125,6 +128,7 @@ dsh_read         { sessionId, afterSeq: 41 }               → { messages: [ …
 - **請把 endpoint 檔案當作機密。** 任何能讀取它的人都可以向你的代理傳送提示。
 - 橋只監聽 DSH 網頁伺服器所監聽的位址，不會自己再開連接埠。
 - 橋以應用程式擁有者的身分發言。你傳送的提示，效果等同於你在應用程式裡親手輸入的提示。
+- `dsh_open_session` 會在 `cwd` 沒有工作區時建立工作區，並把新工作階段的 effort 儲存為應用程式預設值。
 
 ## 設定
 
