@@ -10,7 +10,7 @@
 
 </div>
 
-> 非官方项目，与 DeepSeek 无关。目标版本：DeepSeek Harness `0.2.1-rc.2`。
+> 非官方项目，与 DeepSeek 无关。目标版本：DeepSeek Harness `0.2.1-rc.3`，也可运行在 `0.2.1-rc.2` 上。
 
 ## 这是什么？
 
@@ -28,7 +28,7 @@ DeepSeek Harness（DSH）是一款桌面智能体应用。这个包让另一个�
 
 ## 环境要求
 
-- DeepSeek Harness `0.2.1-rc.2`，并且你可以编辑它的配置档（profile）。
+- DeepSeek Harness `0.2.1-rc.3` 或 `0.2.1-rc.2`，并且你可以编辑它的配置档（profile）。
 - Node.js `^22.19.0` 或 `>=24.0.0`。
 - 一个支持 stdio 的 MCP 客户端。
 
