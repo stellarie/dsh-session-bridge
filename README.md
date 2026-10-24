@@ -10,7 +10,7 @@ English · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
 </div>
 
-> Unofficial. This project has no tie to DeepSeek. It targets DeepSeek Harness `0.2.1-rc.2`.
+> Unofficial. This project has no tie to DeepSeek. It targets DeepSeek Harness `0.2.1-rc.3`. It also runs on `0.2.1-rc.2`.
 
 ## What is this?
 
@@ -28,7 +28,7 @@ The session shows in the app like any other session. You can watch it, or take i
 
 ## Requirements
 
-- DeepSeek Harness `0.2.1-rc.2`, with a profile you can edit.
+- DeepSeek Harness `0.2.1-rc.3` or `0.2.1-rc.2`, with a profile you can edit.
 - Node.js `^22.19.0` or `>=24.0.0`.
 - An MCP client that speaks stdio.
 

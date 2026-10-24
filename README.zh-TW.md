@@ -10,7 +10,7 @@
 
 </div>
 
-> 非官方專案，與 DeepSeek 無關。目標版本：DeepSeek Harness `0.2.1-rc.2`。
+> 非官方專案，與 DeepSeek 無關。目標版本：DeepSeek Harness `0.2.1-rc.3`，也可執行在 `0.2.1-rc.2` 上。
 
 ## 這是什麼？
 
@@ -28,7 +28,7 @@ DeepSeek Harness（DSH）是一款桌面智慧代理應用程式。這個套件�
 
 ## 環境需求
 
-- DeepSeek Harness `0.2.1-rc.2`，而且你可以編輯它的設定檔（profile）。
+- DeepSeek Harness `0.2.1-rc.3` 或 `0.2.1-rc.2`，而且你可以編輯它的設定檔（profile）。
 - Node.js `^22.19.0` 或 `>=24.0.0`。
 - 一個支援 stdio 的 MCP 用戶端。
 
